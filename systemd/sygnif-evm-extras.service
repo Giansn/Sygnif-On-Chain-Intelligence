@@ -1,0 +1,25 @@
+[Unit]
+Description=SYGNIF EVM extras — Uniswap V3 large swaps + cross-chain bridge flows
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sygnif-services
+Environment=PYTHONUNBUFFERED=1
+Environment=SYGNIF_DEX_SWAP_USD=1000000
+Environment=SYGNIF_BRIDGE_USD=1000000
+Environment=SYGNIF_EVM_EXTRAS_POLL_S=600
+EnvironmentFile=/etc/sygnif/evm-keys.env
+ExecStart=/opt/sygnif/.venv/bin/python -u /opt/sygnif-services/sygnif_evm_extras.py
+StandardOutput=append:/var/log/sygnif/evm-extras.log
+StandardError=append:/var/log/sygnif/evm-extras.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

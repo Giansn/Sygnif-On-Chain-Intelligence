@@ -1,0 +1,33 @@
+[Unit]
+Description=SYGNIF chain intelligence — BTC blockchain whale + cluster + UTXO age daemon
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sygnif-services
+Environment=PYTHONUNBUFFERED=1
+Environment=SYGNIF_CHAIN_THRESHOLD_BTC=50
+Environment=SYGNIF_CHAIN_MEMPOOL_POLL_S=15
+Environment=SYGNIF_CHAIN_BLOCK_POLL_S=60
+Environment=SYGNIF_CHAIN_COLD_TX_MAX=50
+Environment=SYGNIF_CHAIN_HOT_TX_MIN=1000
+Environment=SYGNIF_CHAIN_LTH_DAYS=155
+Environment=SYGNIF_CHAIN_DORMANCY_DAYS=1825
+Environment=SYGNIF_CHAIN_MAX_UTXO_PER_TX=5
+Environment=SYGNIF_CHAIN_ADDR_DELAY_S=1.5
+Environment=SYGNIF_CHAIN_UTXO_DELAY_S=0.6
+Environment=SYGNIF_CHAIN_PEEL_MIN=3
+Environment=SYGNIF_CHAIN_PEEL_WIN_S=3600
+ExecStart=/opt/sygnif/.venv/bin/python -u /opt/sygnif-services/sygnif_chain_intel.py
+StandardOutput=append:/var/log/sygnif/chain-intel.log
+StandardError=append:/var/log/sygnif/chain-intel.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

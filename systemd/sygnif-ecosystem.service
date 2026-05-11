@@ -1,0 +1,27 @@
+[Unit]
+Description=SYGNIF ecosystem signals — DefiLlama + CoinGecko + Goldrush
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sygnif-services
+Environment=PYTHONUNBUFFERED=1
+Environment=SYGNIF_DEFILLAMA_POLL_S=900
+Environment=SYGNIF_COINGECKO_POLL_S=300
+Environment=SYGNIF_GOLDRUSH_POLL_S=3600
+Environment=SYGNIF_STABLE_DELTA_USD=100000000
+Environment=SYGNIF_DOMINANCE_DELTA_PCT=0.3
+EnvironmentFile=/etc/sygnif/goldrush-keys.env
+ExecStart=/opt/sygnif/.venv/bin/python -u /opt/sygnif-services/sygnif_ecosystem.py
+StandardOutput=append:/var/log/sygnif/ecosystem.log
+StandardError=append:/var/log/sygnif/ecosystem.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

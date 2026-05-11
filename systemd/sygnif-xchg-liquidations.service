@@ -1,0 +1,24 @@
+[Unit]
+Description=SYGNIF multi-exchange liquidation aggregator (Binance + OKX WS)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sygnif-services
+Environment=PYTHONUNBUFFERED=1
+Environment=SYGNIF_LIQ_REPORT_USD=1000000
+Environment=SYGNIF_LIQ_CLUSTER_WINDOW_S=60
+Environment=SYGNIF_LIQ_CLUSTER_MIN_EXCH=2
+ExecStart=/opt/sygnif/.venv/bin/python -u /opt/sygnif-services/sygnif_xchg_liquidations.py
+StandardOutput=append:/var/log/sygnif/xchg-liquidations.log
+StandardError=append:/var/log/sygnif/xchg-liquidations.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,26 @@
+[Unit]
+Description=SYGNIF EVM signals — USDT/USDC mints + WBTC flow + exchange reserves
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sygnif-services
+Environment=PYTHONUNBUFFERED=1
+Environment=SYGNIF_STABLE_MINT_USD=10000000
+Environment=SYGNIF_WBTC_THRESHOLD=10
+Environment=SYGNIF_EVM_MINT_POLL_S=300
+Environment=SYGNIF_EVM_RESERVE_POLL_S=3600
+EnvironmentFile=/etc/sygnif/evm-keys.env
+ExecStart=/opt/sygnif/.venv/bin/python -u /opt/sygnif-services/sygnif_evm_signals.py
+StandardOutput=append:/var/log/sygnif/evm-signals.log
+StandardError=append:/var/log/sygnif/evm-signals.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

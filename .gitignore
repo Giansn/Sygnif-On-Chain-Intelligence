@@ -1,0 +1,30 @@
+# --- Secrets / runtime state (NEVER commit) ---
+*.env
+*-keys.env
+*.key
+*.pem
+.env
+.env.*
+
+# Runtime state (each daemon writes to /var/lib/sygnif/)
+*.json
+!example_*.json
+
+# Logs (each daemon writes to /var/log/sygnif/)
+*.log
+
+# Cache / pre-patch backups
+*.pre-*
+*.bak
+*.tmp
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*~

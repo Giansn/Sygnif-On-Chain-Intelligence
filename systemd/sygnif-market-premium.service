@@ -1,0 +1,23 @@
+[Unit]
+Description=SYGNIF cross-venue BTC price premium tracker (Coinbase vs Binance vs Bybit)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/sygnif-services
+Environment=PYTHONUNBUFFERED=1
+Environment=SYGNIF_PREMIUM_POLL_S=60
+Environment=SYGNIF_PREMIUM_BPS_EMIT=5
+ExecStart=/opt/sygnif/.venv/bin/python -u /opt/sygnif-services/sygnif_market_premium.py
+StandardOutput=append:/var/log/sygnif/market-premium.log
+StandardError=append:/var/log/sygnif/market-premium.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
