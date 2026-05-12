@@ -18,6 +18,7 @@ from collections import Counter, defaultdict
 STATE = pathlib.Path("/var/lib/sygnif/chain_state.json")
 MEMPOOL = pathlib.Path("/var/lib/sygnif/chain_mempool.json")
 SANCTIONS = pathlib.Path("/var/lib/sygnif/sanctioned_addresses.txt")
+BTC_PRICE = 81850.0
 
 
 def load():
@@ -39,11 +40,26 @@ def load():
 
 
 def fmt_btc(b): return f"{b:>11,.2f}"
-def fmt_usd(b): return f"${b*81850/1e6:>6,.1f}M"
+def fmt_usd(b): return f"${b*BTC_PRICE/1e6:>6,.1f}M"
+
+
+def fetch_btc_price():
+    """Fetch latest BTC price from Binance."""
+    global BTC_PRICE
+    try:
+        import urllib.request
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        req = urllib.request.Request(url, headers={"User-Agent": "sygnif-report/1.0"})
+        r = json.loads(urllib.request.urlopen(req, timeout=5).read())
+        if r and "price" in r:
+            BTC_PRICE = float(r["price"])
+    except:
+        pass
 
 
 def main():
     args = sys.argv[1:]
+    fetch_btc_price()
     s, m, sanc = load()
 
     if "--json" in args:

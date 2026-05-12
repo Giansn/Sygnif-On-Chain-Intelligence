@@ -338,6 +338,66 @@ def okx_thread(state: dict) -> None:
 
 
 # ============================================================================
+# Bitget WS handler
+# ============================================================================
+def bitget_thread(state: dict) -> None:
+    URL = "wss://ws.bitget.com/v2/ws/public"
+
+    def on_message(ws, msg):
+        if msg == "pong":
+            return
+        try:
+            d = json.loads(msg)
+        except json.JSONDecodeError:
+            return
+        if d.get("event") == "subscribe":
+            return
+        if d.get("action") == "update" and "data" in d:
+            for item in d["data"]:
+                symbol = item.get("symbol", "")
+                if not ("BTCUSDT" in symbol or "ETHUSDT" in symbol):
+                    continue
+                bg_side = item.get("side")
+                side = "LONG_LIQ" if bg_side == "buy" else "SHORT_LIQ"
+                try:
+                    price = float(item.get("price", 0))
+                    amount = float(item.get("amount", 0))  # Unit: quote coin
+                    value_usd = amount
+                except (ValueError, TypeError):
+                    continue
+                if value_usd <= 0:
+                    continue
+                record_liq_event(state, "bitget", symbol, side, value_usd, price)
+
+    def on_open(ws):
+        print(f"  [Bitget] WS connected", flush=True)
+        sub_args = [{"instType": "usdt-futures", "topic": "liquidation"}]
+        ws.send(json.dumps({"op": "subscribe", "args": sub_args}))
+        _metrics["bitget_connects"] += 1
+
+    def on_error(ws, e):
+        print(f"  [Bitget] WS error: {e}", file=sys.stderr, flush=True)
+        _metrics["bitget_errors"] += 1
+
+    def on_close(ws, code, reason):
+        print(f"  [Bitget] WS closed code={code}", file=sys.stderr, flush=True)
+
+    while _running:
+        try:
+            ws = websocket.WebSocketApp(URL,
+                                          on_message=on_message,
+                                          on_open=on_open,
+                                          on_error=on_error,
+                                          on_close=on_close)
+            ws.run_forever(ping_interval=20, ping_timeout=10, ping_payload="ping")
+        except Exception as e:
+            print(f"  [Bitget] thread err: {type(e).__name__}: {e}",
+                  file=sys.stderr, flush=True)
+        if _running:
+            time.sleep(5)
+
+
+# ============================================================================
 # Main
 # ============================================================================
 def main() -> int:
@@ -360,8 +420,10 @@ def main() -> int:
     # Launch WS threads
     t_bn  = threading.Thread(target=binance_thread, args=(state,), daemon=True)
     t_okx = threading.Thread(target=okx_thread, args=(state,), daemon=True)
+    t_bg  = threading.Thread(target=bitget_thread, args=(state,), daemon=True)
     t_bn.start()
     t_okx.start()
+    t_bg.start()
 
     last_save = 0.0
     last_hb = 0.0
@@ -377,6 +439,7 @@ def main() -> int:
         if now - last_hb >= HEARTBEAT_S:
             print(f"  [HB] bn={_metrics.get('liq_events_binance',0)} "
                   f"okx={_metrics.get('liq_events_okx',0)} "
+                  f"bg={_metrics.get('liq_events_bitget',0)} "
                   f"clusters={_metrics.get('clusters_emitted',0)} "
                   f"swarm={_metrics.get('swarm_emits',0)}",
                   flush=True)
