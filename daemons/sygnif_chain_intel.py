@@ -100,6 +100,7 @@ KNOWN_EXCHANGE = {
 _running = True
 _metrics = defaultdict(int)
 _metrics["started_at"] = time.time()
+_btc_price = 81850.0
 
 
 # ============================================================================
@@ -133,6 +134,18 @@ def fetch_tip_hash() -> str | None:
     if s and len(s.strip()) == 64:
         return s.strip()
     return None
+
+
+def fetch_prices():
+    """Fetch latest BTC price from Binance."""
+    global _btc_price
+    try:
+        r = _http_get_json("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT")
+        if r and "price" in r:
+            _btc_price = float(r["price"])
+            _metrics["price_updates"] += 1
+    except Exception as e:
+        print(f"  ! price fetch failed: {e}", file=sys.stderr, flush=True)
 
 
 def fetch_block_full(block_hash: str) -> dict | None:
@@ -666,13 +679,13 @@ def scan_mempool(mempool_watch: dict, state: dict) -> None:
 
         # Emit early-warning event
         head = (f"MEMPOOL_WHALE pending: {total_out:,.1f} BTC "
-                f"(~${total_out*81850/1e6:,.1f}M) "
+                f"(~${total_out*_btc_price/1e6:,.1f}M) "
                 f"tx={txid[:10]}... fee={tx.get('fee',0)} sat")
         emit_swarm_event("chain.mempool_whale", head, {
             "type":      "MEMPOOL_WHALE",
             "txid":      txid,
             "value_btc": round(total_out, 2),
-            "value_usd": round(total_out * 81850, 0),
+            "value_usd": round(total_out * _btc_price, 0),
             "from":      from_addrs,
             "to":        to_addrs,
             "fee_sat":   tx.get("fee", 0),
@@ -849,7 +862,7 @@ def scan_block(state: dict, mempool_watch: dict, sanctioned: set, block: dict) -
             "block":         height,
             "tx_hash":       h,
             "value_btc":     round(total_out, 2),
-            "value_usd":     round(total_out * 81850, 0),
+            "value_usd":     round(total_out * _btc_price, 0),
             "from":          in_addrs,
             "to":            out_addrs,
             "confidence":    base_conf,
@@ -862,7 +875,7 @@ def scan_block(state: dict, mempool_watch: dict, sanctioned: set, block: dict) -
         _metrics["whale_txs_seen"] += 1
 
         head_parts = [
-            f"{category} {total_out:,.1f} BTC (~${total_out*81850/1e6:,.1f}M)",
+            f"{category} {total_out:,.1f} BTC (~${total_out*_btc_price/1e6:,.1f}M)",
             f"blk={height}",
         ]
         if utxo_age.get("median_age_days") is not None:
@@ -1375,9 +1388,15 @@ def main() -> int:
     last_block_poll = 0.0
     last_save = 0.0
     last_ln_poll = 0.0
+    last_price_poll = 0.0
 
     while _running:
         now = time.time()
+
+        # Update prices every 5 min
+        if now - last_price_poll >= 300:
+            fetch_prices()
+            last_price_poll = now
 
         # TRACK 1: Mempool monitor (every 15s)
         if now - last_mempool_poll >= MEMPOOL_POLL_S:
