@@ -15,7 +15,7 @@ Built to feed a perp-trading system, but the data layer is exchange-agnostic.
 | `sygnif_chain_intel` | mempool.space + blockchain.info + blockstream.info | 60s block, 15s mempool, 1h LN | BTC whale txs (≥50 BTC), UTXO age (LTH/STH split), dormancy breaks (≥5y), CIH wallet clustering, peeling-chain detection, CoinJoin/Wasabi/Whirlpool/JoinMarket fingerprints, OFAC sanctioned address tagging, Lightning ecosystem stats |
 | `sygnif_evm_signals` | Etherscan V2 + Alchemy | 5m mints, 1h reserves | USDT / USDC mints from Tether/Circle treasuries, WBTC mint/burn (wrapped-BTC bridge flows), 9 exchange-cluster reserve snapshots (USDT/USDC/WBTC/DAI) |
 | `sygnif_tron_signals` | TronGrid public v1 | 5m | USDT/USDC/USDD mint events on Tron (where most Tether liquidity actually lives) |
-| `sygnif_xchg_liquidations` | Binance + OKX public WS | real-time | Forced liquidations across exchanges; cross-exchange cluster detection (when ≥2 venues liquidate same asset+side within 60s) |
+| `sygnif_xchg_liquidations` | Binance + OKX + Bitget public WS | real-time | Forced liquidations across exchanges; cross-exchange cluster detection (when ≥2 venues liquidate same asset+side within 60s) |
 | `sygnif_market_premium` | Coinbase + Binance + Bybit public REST | 60s | Coinbase USD vs Binance USDT premium (US institutional bid signal); Binance spot vs Bybit perp basis (perp backwardation = bullish) |
 | `sygnif_evm_extras` | Etherscan V2 + Alchemy | 10m | Uniswap V3 large swaps (USDC/USDT/WBTC pools); cross-chain bridge flows (Stargate, Across, LayerZero, Wormhole) |
 | `sygnif_ecosystem` | DefiLlama + CoinGecko + Goldrush/Covalent | 5m / 15m / 1h | Per-chain stablecoin supply, USDT/USDC peg deltas, BTC dominance & total market cap, cross-chain entity portfolios with USD valuation |
@@ -67,8 +67,8 @@ essential because >50% of Tether activity is on Tron.
 
 **Multi-exchange liquidation clusters** — single-exchange liquidations
 are noise. When ≥2 venues liquidate the same asset+side within 60s,
-that's a cascade event with tradeable implications. Binance and OKX
-both expose free public WebSocket liquidation streams.
+that's a cascade event with tradeable implications. Binance, OKX, and
+Bitget all expose free public WebSocket liquidation streams.
 
 **Cross-venue premium/basis** — Coinbase vs Binance gap tells you about
 US institutional appetite. Binance spot vs Bybit perp basis tells you
@@ -85,7 +85,7 @@ about backwardation (perp discount = structurally bullish).
 │  ETH chain     Etherscan V2 + Alchemy                                            │
 │  Tron chain    TronGrid public v1                                                │
 │  Multi-EVM     Goldrush/Covalent (100+ chains, unified schema)                   │
-│  Exchanges     Binance WS, OKX WS, Coinbase REST, Bybit REST                     │
+│  Exchanges     Binance WS, OKX WS, Bitget WS, Coinbase REST, Bybit REST          │
 │  Markets       DefiLlama (no key), CoinGecko (no key)                            │
 │  Sanctions     OFAC sanctioned BTC list (github.com/0xB10C/...)                  │
 │                                                                                  │
@@ -129,7 +129,7 @@ about backwardation (perp discount = structurally bullish).
 | mempool.space / blockchain.info / blockstream.info | none | unlimited (just don't hammer it) |
 | DefiLlama | none | generous, no signup |
 | CoinGecko `/global` `/coins/markets` | none | ~10-50 req/min |
-| Binance/OKX public WS | none | unlimited |
+| Binance/OKX/Bitget public WS | none | unlimited |
 | Coinbase Exchange ticker | none | unlimited |
 | TronGrid v1 | none | works without key, key adds higher rate limit |
 | Etherscan V2 | free signup → key | 5 req/sec, 100k/day |

@@ -56,7 +56,8 @@ TRON_EXCHANGE_WALLETS = {
 }
 
 HEADERS = {"User-Agent": "sygnif-tron-signals/1.0"}
-# TronGrid key not yet provisioned — public v1 works without authif False and TRON_API_KEY:    HEADERS["TRON-PRO-API-KEY"] = TRON_API_KEY
+if TRON_API_KEY:
+    HEADERS["TRON-PRO-API-KEY"] = TRON_API_KEY
 
 _running = True
 _metrics = defaultdict(int)
