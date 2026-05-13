@@ -220,6 +220,21 @@ can use stricter thresholds.
 
 ---
 
+## Integration with SYGNIF Bot
+
+This intelligence stack is designed to feed the [SYGNIF Freqtrade Bot](https://github.com/Giansn/SYGNIF).
+
+1.  **Shared Memory**: All daemons write detected events to `/var/lib/sygnif/swarm.db`.
+2.  **Sentiment Signal**: The `trade-overseer` component of the SYGNIF bot can monitor `swarm_entries` to confirm TA signals before execution.
+3.  **Dynamic Pairlists**: Use `utils/sygnif_chain_report.py --peeling` or `--events` to identify high-activity tokens for manual or automated addition to the bot's whitelist.
+4.  **Health Monitoring**:
+    ```bash
+    # Check if the intelligence stack is healthy
+    python3 utils/sygnif_health.py
+    ```
+
+---
+
 ## Limitations & honest gaps
 
 - **Address tagging is heuristic.** ~11 hardcoded exchange anchors plus

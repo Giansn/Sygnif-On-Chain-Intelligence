@@ -15,6 +15,13 @@ Usage:
 import json, pathlib, sys, time
 from collections import Counter, defaultdict
 
+try:
+    import daemons.sygnif_common as common
+except ImportError:
+    # If run from within utils/
+    sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent))
+    import daemons.sygnif_common as common
+
 STATE = pathlib.Path("/var/lib/sygnif/chain_state.json")
 MEMPOOL = pathlib.Path("/var/lib/sygnif/chain_mempool.json")
 SANCTIONS = pathlib.Path("/var/lib/sygnif/sanctioned_addresses.txt")
@@ -44,17 +51,11 @@ def fmt_usd(b): return f"${b*BTC_PRICE/1e6:>6,.1f}M"
 
 
 def fetch_btc_price():
-    """Fetch latest BTC price from Binance."""
+    """Fetch latest BTC price from common utility."""
     global BTC_PRICE
-    try:
-        import urllib.request
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        req = urllib.request.Request(url, headers={"User-Agent": "sygnif-report/1.0"})
-        r = json.loads(urllib.request.urlopen(req, timeout=5).read())
-        if r and "price" in r:
-            BTC_PRICE = float(r["price"])
-    except:
-        pass
+    p = common.fetch_ticker_price("BTCUSDT")
+    if p:
+        BTC_PRICE = p
 
 
 def main():

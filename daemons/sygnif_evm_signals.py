@@ -43,6 +43,11 @@ import urllib.request
 import uuid
 from collections import defaultdict
 
+try:
+    import sygnif_common as common
+except ImportError:
+    from . import sygnif_common as common
+
 # ============================================================================
 # Config
 # ============================================================================
@@ -159,17 +164,12 @@ def alchemy_rpc(method: str, params: list) -> dict | None:
 
 
 def fetch_prices():
-    """Fetch latest BTC price from Binance."""
+    """Fetch latest BTC price from common utility."""
     global _btc_price
-    try:
-        # We can use a simple GET since we don't need a key for public ticker
-        req = urllib.request.Request("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", headers=HEADERS)
-        r = json.loads(urllib.request.urlopen(req, timeout=10).read())
-        if r and "price" in r:
-            _btc_price = float(r["price"])
-            _metrics["price_updates"] += 1
-    except Exception as e:
-        print(f"  ! price fetch failed: {e}", file=sys.stderr, flush=True)
+    p = common.fetch_ticker_price("BTCUSDT")
+    if p:
+        _btc_price = p
+        _metrics["price_updates"] += 1
 
 
 # ============================================================================
