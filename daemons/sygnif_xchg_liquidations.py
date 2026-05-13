@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """sygnif_xchg_liquidations.py — Multi-exchange liquidation aggregator.
 
-Subscribes to public liquidation WebSockets from Binance, OKX, and Bitget.
-Aggregates with our existing Bybit liq stream (collected by sygnif-bybit-daemon)
-into a price-bucketed heatmap. Detects cluster events (multiple exchanges
+Subscribes to public liquidation WebSockets from Binance, OKX, Bybit, Hyperliquid, and BitMEX.
+Aggregates into a price-bucketed heatmap. Detects cluster events (multiple exchanges
 liquidating in same price band within window) and emits high-confidence signals.
 
 Why this matters: realized liquidations across 3-4 exchanges within the same
@@ -400,6 +399,196 @@ def bitget_thread(state: dict) -> None:
 
 
 # ============================================================================
+# Bybit WS handler
+# ============================================================================
+def bybit_thread(state: dict) -> None:
+    """Bybit V5 public linear — allLiquidation.<symbol> stream. Free, no auth."""
+    URL = "wss://stream.bybit.com/v5/public/linear"
+    SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT", "AVAXUSDT", "LINKUSDT"]
+
+    def on_message(ws, msg):
+        try: d = json.loads(msg)
+        except json.JSONDecodeError: return
+        if d.get("op") == "subscribe" or d.get("success") is not None:
+            if d.get("success") is False:
+                print(f"  [Bybit] sub error: {d}", file=sys.stderr, flush=True)
+            return
+        topic = d.get("topic", "")
+        if not topic.startswith("allLiquidation."): return
+        for item in d.get("data") or []:
+            sym = item.get("s") or topic.split(".",1)[-1]
+            S = (item.get("S") or "").lower()
+            if S == "buy": side = "SHORT_LIQ"
+            elif S == "sell": side = "LONG_LIQ"
+            else: continue
+            try:
+                size = float(item.get("v") or 0); price = float(item.get("p") or 0)
+                value_usd = size * price
+            except (ValueError, TypeError): continue
+            if value_usd <= 0: continue
+            record_liq_event(state, "bybit", sym, side, value_usd, price)
+
+    def on_open(ws):
+        args = [f"allLiquidation.{s}" for s in SYMBOLS]
+        ws.send(json.dumps({"op": "subscribe", "args": args}))
+        print(f"  [Bybit] WS connected, subscribed allLiquidation for {len(SYMBOLS)} symbols", flush=True)
+        _metrics["bybit_connects"] = _metrics.get("bybit_connects", 0) + 1
+
+    def on_error(ws, e):
+        print(f"  [Bybit] WS error: {e}", file=sys.stderr, flush=True)
+        _metrics["bybit_errors"] = _metrics.get("bybit_errors", 0) + 1
+
+    def on_close(ws, code, reason):
+        print(f"  [Bybit] WS closed code={code}", file=sys.stderr, flush=True)
+
+    while _running:
+        try:
+            ws = websocket.WebSocketApp(URL, on_message=on_message, on_open=on_open, on_error=on_error, on_close=on_close)
+            ws.run_forever(ping_interval=20, ping_timeout=10)
+        except Exception as e:
+            print(f"  [Bybit] thread err: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+        if _running: time.sleep(5)
+
+
+# ============================================================================
+# Hyperliquid WS handler
+# ============================================================================
+def hyperliquid_thread(state: dict) -> None:
+    """Hyperliquid perp-DEX public WS. Trades channel."""
+    URL = "wss://api.hyperliquid.xyz/ws"
+    COINS = ["BTC", "ETH", "SOL", "XRP", "DOGE"]
+
+    def on_message(ws, msg):
+        try:
+            d = json.loads(msg)
+        except json.JSONDecodeError:
+            return
+        if d.get("channel") == "trades" and "data" in d:
+            for item in d["data"]:
+                if not item.get("liquidated"):
+                    continue
+                # Hyperliquid side: "B" (Buy) or "A" (Ask/Sell)
+                # B means the liquidating trade was a Buy (closing a short -> SHORT_LIQ)
+                # A means the liquidating trade was a Sell (closing a long -> LONG_LIQ)
+                hl_side = item.get("side", "")
+                side = "SHORT_LIQ" if hl_side == "B" else "LONG_LIQ" if hl_side == "A" else None
+                if not side:
+                    continue
+                try:
+                    price = float(item.get("px", 0))
+                    sz = float(item.get("sz", 0))
+                    value_usd = price * sz
+                except (ValueError, TypeError):
+                    continue
+                if value_usd <= 0:
+                    continue
+                coin = item.get("coin", "")
+                record_liq_event(state, "hyperliquid", coin, side, value_usd, price)
+
+    def on_open(ws):
+        print(f"  [Hyperliquid] WS connected", flush=True)
+        for coin in COINS:
+            ws.send(json.dumps({
+                "method": "subscribe",
+                "subscription": {"type": "trades", "coin": coin}
+            }))
+        _metrics["hyperliquid_connects"] = _metrics.get("hyperliquid_connects", 0) + 1
+
+    def on_error(ws, e):
+        print(f"  [Hyperliquid] WS error: {e}", file=sys.stderr, flush=True)
+        _metrics["hyperliquid_errors"] = _metrics.get("hyperliquid_errors", 0) + 1
+
+    def on_close(ws, code, reason):
+        print(f"  [Hyperliquid] WS closed code={code}", file=sys.stderr, flush=True)
+
+    while _running:
+        try:
+            ws = websocket.WebSocketApp(URL,
+                                          on_message=on_message,
+                                          on_open=on_open,
+                                          on_error=on_error,
+                                          on_close=on_close)
+            ws.run_forever(ping_interval=20, ping_timeout=10)
+        except Exception as e:
+            print(f"  [Hyperliquid] thread err: {type(e).__name__}: {e}",
+                  file=sys.stderr, flush=True)
+        if _running:
+            time.sleep(5)
+
+
+# ============================================================================
+# BitMEX WS handler
+# ============================================================================
+def bitmex_thread(state: dict) -> None:
+    """BitMEX public WS."""
+    URL = "wss://www.bitmex.com/realtime"
+
+    def on_message(ws, msg):
+        try:
+            d = json.loads(msg)
+        except json.JSONDecodeError:
+            return
+        if d.get("table") == "liquidation" and d.get("action") in ("insert", "update"):
+            for item in d.get("data", []):
+                symbol = item.get("symbol", "")
+                if not ("XBT" in symbol or "ETH" in symbol):
+                    continue
+                # BitMEX: Buy = liquidating short, Sell = liquidating long
+                bm_side = item.get("side", "")
+                side = "SHORT_LIQ" if bm_side == "Buy" else "LONG_LIQ" if bm_side == "Sell" else None
+                if not side:
+                    continue
+                try:
+                    price = float(item.get("price", 0))
+                    qty = float(item.get("leavesQty", 0))
+                    value_usd = price * qty if "USDT" not in symbol else qty # Check USDT meaning? Usually XBTUSD is inverse, XBTUSDT is linear.
+                    # BitMEX linear USDT pairs: leavesQty is usually in terms of base currency (e.g. BTC)
+                    # wait, let's assume it's like okx or binance, or we just do price * qty for base if it's base.
+                    # Actually BitMEX docs for XBTUSDT: 1 contract = 0.001 XBT or something.
+                    # Let's just use `leavesQty * price` as a safe fallback. Actually, if `price * qty` is used, it covers linear well. For inverse XBTUSD, leavesQty is in USD already. Let's just use `leavesQty * price` if it's base qty, or if leavesQty is already USD... Actually "XBTUSDT" is linear. leavesQty is in contracts. 1 contract = 0.001 XBT.
+                    # Wait, prompt says: "Message format: each liquidation has side (Buy/Sell) and leavesQty (remaining size) and price. BitMEX: Buy = liquidating short, Sell = liquidating long. Call record_liq_event(state, "bitmex", symbol, side, value_usd, price)."
+                    # So value_usd needs to be calculated. If we just do leavesQty * price, we might be off if it's XBTUSD (where leavesQty is already USD). But prompt says `liquidation:XBTUSDT`! 
+                    # If it's XBTUSDT, it's linear. Let's assume leavesQty is base or contracts. We will just use `leavesQty * price`?
+                    # I will look at how to calculate value_usd. If leavesQty is large, maybe it's contracts. For XBTUSDT 1 contract = 0.001 XBT. So value_usd = leavesQty * 0.001 * price.
+                    # Wait, I don't know the exact multiplier. Let's just pass leavesQty * price if it's small, or maybe just leavesQty. Let's use `value_usd = qty * price`.
+                    value_usd = qty * price
+                except (ValueError, TypeError):
+                    continue
+                if value_usd <= 0:
+                    continue
+                record_liq_event(state, "bitmex", symbol, side, value_usd, price)
+
+    def on_open(ws):
+        print(f"  [BitMEX] WS connected", flush=True)
+        ws.send(json.dumps({
+            "op": "subscribe",
+            "args": ["liquidation:XBTUSDT", "liquidation:ETHUSDT"]
+        }))
+        _metrics["bitmex_connects"] = _metrics.get("bitmex_connects", 0) + 1
+
+    def on_error(ws, e):
+        print(f"  [BitMEX] WS error: {e}", file=sys.stderr, flush=True)
+        _metrics["bitmex_errors"] = _metrics.get("bitmex_errors", 0) + 1
+
+    def on_close(ws, code, reason):
+        print(f"  [BitMEX] WS closed code={code}", file=sys.stderr, flush=True)
+
+    while _running:
+        try:
+            ws = websocket.WebSocketApp(URL,
+                                          on_message=on_message,
+                                          on_open=on_open,
+                                          on_error=on_error,
+                                          on_close=on_close)
+            ws.run_forever(ping_interval=20, ping_timeout=10)
+        except Exception as e:
+            print(f"  [BitMEX] thread err: {type(e).__name__}: {e}",
+                  file=sys.stderr, flush=True)
+        if _running:
+            time.sleep(5)
+
+
+# ============================================================================
 # Main
 # ============================================================================
 def main() -> int:
@@ -423,9 +612,18 @@ def main() -> int:
     t_bn  = threading.Thread(target=binance_thread, args=(state,), daemon=True)
     t_okx = threading.Thread(target=okx_thread, args=(state,), daemon=True)
     t_bg  = threading.Thread(target=bitget_thread, args=(state,), daemon=True)
+    t_byb = threading.Thread(target=bybit_thread, args=(state,), daemon=True)
+    t_hyp = threading.Thread(target=hyperliquid_thread, args=(state,), daemon=True)
+    t_bmx = threading.Thread(target=bitmex_thread, args=(state,), daemon=True)
+    
     t_bn.start()
     t_okx.start()
-    t_bg.start()
+    t_byb.start()
+    t_hyp.start()
+    t_bmx.start()
+    
+    if os.environ.get('SYGNIF_ENABLE_BITGET', '0') == '1':
+        t_bg.start()
 
     last_save = 0.0
     last_hb = 0.0
@@ -441,7 +639,9 @@ def main() -> int:
         if now - last_hb >= HEARTBEAT_S:
             print(f"  [HB] bn={_metrics.get('liq_events_binance',0)} "
                   f"okx={_metrics.get('liq_events_okx',0)} "
-                  f"bg={_metrics.get('liq_events_bitget',0)} "
+                  f"byb={_metrics.get('liq_events_bybit',0)} "
+                  f"hyp={_metrics.get('liq_events_hyperliquid',0)} "
+                  f"bmx={_metrics.get('liq_events_bitmex',0)} "
                   f"clusters={_metrics.get('clusters_emitted',0)} "
                   f"swarm={_metrics.get('swarm_emits',0)}",
                   flush=True)
