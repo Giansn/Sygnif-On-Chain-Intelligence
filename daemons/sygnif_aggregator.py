@@ -41,7 +41,8 @@ SIGNAL_LOGIC = {
         30
     ),
     "chain.dormancy_break": (
-        lambda m: -1, # Old BTC moving is structurally bearish
+        lambda m: (-1 if m.get("category") == "DEPOSIT_TO_EXCHANGE" else
+                   (1 if m.get("category") in ("ACCUMULATION_TO_COLD", "WITHDRAWAL_FROM_EXCHANGE") else 0)),
         40
     ),
     "chain.whale": (
@@ -55,6 +56,7 @@ def setup_db():
         return False
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS weighted_signals (
                 id TEXT PRIMARY KEY,
@@ -66,6 +68,18 @@ def setup_db():
                 meta TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS weighted_signals_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts INTEGER,
+                ts_utc TEXT,
+                pair TEXT,
+                score REAL,
+                confluence INTEGER,
+                meta TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_weighted_signals_history_ts ON weighted_signals_history(ts)")
         conn.commit()
         conn.close()
         return True
@@ -112,10 +126,10 @@ def calculate_weighted_sentiment(lookback_s: int = 3600):
         if direction == 0:
             continue
             
-        # Apply Linear Time Decay
-        # (1.0 at T=0, 0.0 at T=lookback)
+        # Apply Exponential Time Decay
+        # (Signals lose 50% power every 30 minutes, half-life = 1800s)
         age_s = now - row["created"]
-        decay = max(0, 1 - (age_s / lookback_s))
+        decay = 0.5 ** (age_s / 1800.0)
         
         contribution = direction * base_weight * decay
         total_score += contribution
@@ -147,10 +161,19 @@ def main():
             
             # Persist the "Brain State"
             conn = sqlite3.connect(DB_PATH)
+
+            # Retention sweep
+            conn.execute("DELETE FROM weighted_signals_history WHERE ts < strftime('%s','now') - 86400*7")
+
             conn.execute(
                 "INSERT OR REPLACE INTO weighted_signals (id, ts, ts_utc, pair, score, confluence, meta) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 ("BTC_GLOBAL", now, now_utc, "BTCUSDT", round(score, 2), confluence, json.dumps(details))
+            )
+            conn.execute(
+                "INSERT INTO weighted_signals_history (ts, ts_utc, pair, score, confluence, meta) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (now, now_utc, "BTCUSDT", round(score, 2), confluence, json.dumps(details))
             )
             conn.commit()
             conn.close()
