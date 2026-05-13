@@ -435,7 +435,14 @@ def merge_into_cluster(state: dict, addrs: set, source: str = "CIH") -> str:
 # ============================================================================
 # UTXO age — Long-term vs Short-term holder analysis
 # ============================================================================
-_utxo_cache: dict = {}   # prev_txid -> {block_time, value_total}
+import collections
+_utxo_cache: collections.OrderedDict = collections.OrderedDict()   # prev_txid -> {block_time, value_total}
+MAX_CACHE_SIZE = 10000
+
+def _add_to_cache(cache, key, value):
+    cache[key] = value
+    if len(cache) > MAX_CACHE_SIZE:
+        cache.popitem(last=False)
 
 def fetch_utxo_creation_time(prev_txid: str) -> int | None:
     """Get the block_time (unix sec) when this prev tx was confirmed (mempool.space)."""
@@ -444,10 +451,10 @@ def fetch_utxo_creation_time(prev_txid: str) -> int | None:
     tx = fetch_tx(prev_txid)
     _metrics["utxo_lookups"] += 1
     if not tx:
-        _utxo_cache[prev_txid] = None
+        _add_to_cache(_utxo_cache, prev_txid, None)
         return None
     bt = (tx.get("status") or {}).get("block_time")
-    _utxo_cache[prev_txid] = bt
+    _add_to_cache(_utxo_cache, prev_txid, bt)
     return bt
 
 
@@ -464,10 +471,10 @@ def fetch_utxo_creation_time_by_index(prev_tx_index: int) -> int | None:
     tx = _http_get_json(url)
     _metrics["utxo_lookups"] += 1
     if not tx:
-        _utxo_cache[cache_key] = None
+        _add_to_cache(_utxo_cache, cache_key, None)
         return None
     bt = tx.get("time")  # blockchain.info uses .time (unix sec)
-    _utxo_cache[cache_key] = bt
+    _add_to_cache(_utxo_cache, cache_key, bt)
     return bt
 
 
@@ -964,7 +971,7 @@ def scan_block(state: dict, mempool_watch: dict, sanctioned: set, block: dict) -
 # ============================================================================
 # Module: CIH expansion via address history (blockstream.info /address/{addr}/txs)
 # ============================================================================
-_history_cache: dict = {}  # addr -> last fetched timestamp
+_history_cache: collections.OrderedDict = collections.OrderedDict()  # addr -> last fetched timestamp
 
 def expand_cluster_via_history(state: dict, addr: str,
                                  max_txs: int = 25) -> int:
@@ -980,7 +987,7 @@ def expand_cluster_via_history(state: dict, addr: str,
     last = _history_cache.get(addr, 0)
     if now - last < 3600:
         return 0
-    _history_cache[addr] = now
+    _add_to_cache(_history_cache, addr, now)
 
     url = f"{BLOCKSTREAM_BASE}/address/{addr}/txs"
     txs = _http_get_json(url)
