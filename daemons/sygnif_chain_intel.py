@@ -311,10 +311,25 @@ def _tier_to_confidence(tier: str) -> int:
     }.get(tier, 10)
 
 
-def classify(addr: str, summary: dict, sanctioned: set) -> tuple[str, str, int]:
+def classify(addr: str, summary: dict, sanctioned: set, arkham: dict | None = None) -> tuple[str, str, int]:
     """Return (tier, label, confidence) for an address."""
     if addr in sanctioned:
         return ("SANCTIONED", "OFAC sanctioned address", 100)
+
+    # Prioritize Arkham attribution if available
+    if arkham and arkham.get("entity"):
+        e = arkham["entity"]
+        label = e.get("name") or e.get("id") or "Unknown Entity"
+        arkham_type = e.get("type", "").upper()
+
+        if arkham_type == "EXCHANGE":
+            return ("EXCHANGE", label, 98)
+        if arkham_type in ("FUND", "ASSET_MANAGER"):
+            return ("INSTITUTION", label, 95)
+        if arkham_type == "MINER":
+            return ("MINER", label, 95)
+        return ("ENTITY", label, 85)
+
     if addr in KNOWN_EXCHANGE:
         return ("EXCHANGE", KNOWN_EXCHANGE[addr], 95)
     if summary is None:
@@ -754,7 +769,11 @@ def scan_block(state: dict, mempool_watch: dict, sanctioned: set, block: dict) -
             break
         info = fetch_address(addr)
         summary = address_summary(info)
-        tier, label, confidence = classify(addr, summary, sanctioned)
+
+        # Try Arkham for deeper intelligence
+        arkham_data = common.fetch_arkham_intel(addr)
+
+        tier, label, confidence = classify(addr, summary, sanctioned, arkham_data)
         cluster_id = state["addr_to_cluster"].get(addr)
         wallet = {
             "addr":           addr,

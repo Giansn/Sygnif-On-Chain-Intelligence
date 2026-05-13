@@ -47,6 +47,18 @@ SIGNAL_LOGIC = {
     "chain.whale": (
         lambda m: 1 if m.get("category") in ("WITHDRAWAL_FROM_EXCHANGE", "ACCUMULATION_TO_COLD") else (-1 if m.get("category") == "DEPOSIT_TO_EXCHANGE" else 0),
         10
+    ),
+    "btc.institutional_flow": (
+        lambda m: 1 if m.get("delta", 0) > 0 else -1,
+        25
+    ),
+    "btc.exchange_netflow": (
+        lambda m: -1 if m.get("delta", 0) > 0 else 1, # Inflow to exchange is bearish
+        20
+    ),
+    "btc.miner_pressure": (
+        lambda m: -1 if m.get("delta", 0) < 0 else 0, # Only track distribution
+        15
     )
 }
 

@@ -19,6 +19,7 @@ Built to feed a perp-trading system, but the data layer is exchange-agnostic.
 | `sygnif_market_premium` | Coinbase + Binance + Bybit public REST | 60s | Coinbase USD vs Binance USDT premium (US institutional bid signal); Binance spot vs Bybit perp basis (perp backwardation = bullish) |
 | `sygnif_evm_extras` | Etherscan V2 + Alchemy | 10m | Uniswap V3 large swaps (USDC/USDT/WBTC pools); cross-chain bridge flows (Stargate, Across, LayerZero, Wormhole) |
 | `sygnif_ecosystem` | DefiLlama + CoinGecko + Goldrush/Covalent | 5m / 15m / 1h | Per-chain stablecoin supply, USDT/USDC peg deltas, BTC dominance & total market cap, cross-chain entity portfolios with USD valuation |
+| `sygnif_btc_depth` | Arkham Intel API | 1h | **Institutional Depth**: ETF holdings, aggregate Exchange netflow, and Miner cluster balances |
 | `sygnif_aggregator` | `swarm.db` events | 60s | **The Brain**: turning raw events into a weighted sentiment score (-100 to +100) |
 | `sygnif_signal_bot` | `sygnif_aggregator` output | real-time | **The Execution**: reference trading bot that follows aggregated sentiment |
 
@@ -137,6 +138,7 @@ about backwardation (perp discount = structurally bullish).
 | Etherscan V2 | free signup → key | 5 req/sec, 100k/day |
 | Alchemy | free signup → key | 300M compute units/month |
 | Goldrush/Covalent | free signup → key | trial credits, then paid |
+| Arkham Intel | free/paid API key | entity attribution and aggregate balances |
 
 ---
 
