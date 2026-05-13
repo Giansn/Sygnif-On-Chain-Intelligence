@@ -358,7 +358,9 @@ def bitget_thread(state: dict) -> None:
                 if not ("BTCUSDT" in symbol or "ETHUSDT" in symbol):
                     continue
                 bg_side = item.get("side")
-                side = "LONG_LIQ" if bg_side == "buy" else "SHORT_LIQ"
+                # Bitget: 'buy' = taker buy = closing a SHORT = SHORT_LIQ
+                #         'sell' = taker sell = closing a LONG = LONG_LIQ
+                side = "SHORT_LIQ" if bg_side == "buy" else "LONG_LIQ"
                 try:
                     price = float(item.get("price", 0))
                     amount = float(item.get("amount", 0))  # Unit: quote coin

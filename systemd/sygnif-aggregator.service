@@ -1,0 +1,18 @@
+[Unit]
+Description=SYGNIF Signal Aggregator (Brain) — reads swarm.db events and writes weighted_signals
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/sygnif/.venv/bin/python /opt/sygnif-services/sygnif_aggregator.py
+StandardOutput=append:/var/log/sygnif/aggregator.log
+StandardError=append:/var/log/sygnif/aggregator.log
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

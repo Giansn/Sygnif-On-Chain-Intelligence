@@ -39,6 +39,11 @@ import urllib.request
 import uuid
 from collections import defaultdict
 
+try:
+    import sygnif_common as common
+except ImportError:
+    from . import sygnif_common as common
+
 ETHERSCAN_KEY  = os.environ.get("SYGNIF_ETHERSCAN_KEY", "")
 ALCHEMY_KEY    = os.environ.get("SYGNIF_ALCHEMY_KEY", "")
 
@@ -114,20 +119,15 @@ def alchemy_rpc(method, params):
 
 
 def fetch_prices():
-    """Fetch latest BTC and ETH prices from Binance."""
+    """Fetch latest BTC and ETH prices from common utility."""
     global _btc_price, _eth_price
-    try:
-        # BTC
-        r_btc = _http_get_json("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT")
-        if r_btc and "price" in r_btc:
-            _btc_price = float(r_btc["price"])
-        # ETH
-        r_eth = _http_get_json("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT")
-        if r_eth and "price" in r_eth:
-            _eth_price = float(r_eth["price"])
+    prices = common.fetch_prices_multi(["BTCUSDT", "ETHUSDT"])
+    if "BTCUSDT" in prices:
+        _btc_price = prices["BTCUSDT"]
+    if "ETHUSDT" in prices:
+        _eth_price = prices["ETHUSDT"]
+    if prices:
         _metrics["price_updates"] += 1
-    except Exception as e:
-        print(f"  ! price fetch failed: {e}", file=sys.stderr, flush=True)
 
 
 def emit_swarm(topic, content, meta, tags):
