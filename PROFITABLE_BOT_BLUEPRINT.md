@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS signal_scores (
 |---|---|---|
 | `market.premium` | `cb_bn_bps > 5` | +20 |
 | `tron.stablecoin_mint` | `$USD > 100M` | +15 |
-| `xchg.liquidation_cluster` | `n_exchanges >= 3` | -30 (bearish flush) |
+| `xchg.liquidation_cluster` | `SHORT_LIQ, n_exchanges>=2` | +30 (short squeeze, bullish) |
+| `xchg.liquidation_cluster` | `LONG_LIQ, n_exchanges>=2` | -30 (long capitulation, bearish) |
 | `evm.wbtc_flow` | `MINT > 50 BTC` | +10 |
 | `chain.dormancy_break` | `age > 5y AND value > 500` | -40 (whale exit) |
 

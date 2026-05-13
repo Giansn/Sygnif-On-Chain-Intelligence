@@ -14,6 +14,8 @@ Instead of the strategy making network calls, a dedicated **Signal Aggregator** 
 - **Cross-Corroboration**: If `market.premium` and `chain.whale` both signal bullishness, the combined weight is amplified (non-linear scaling).
 - **Output**: Writes a single `weighted_sentiment` row to `swarm.db` for the trading bot to read.
 
+*Note on Liquidation Clusters:* `LONG_LIQ` clusters often mark local bottoms, but the aggregator scores them bearish on the immediate-momentum timeframe. Mean-reversion harvesting is left to the consumer (signal_bot or strategy).
+
 ## 3. Risk Engine (The Guard)
 The Risk Engine gates the Execution layer based on global "Health" metrics:
 - **Volatility Filter**: Blocks entries if `ATR_14` is too high relative to price.

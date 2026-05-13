@@ -43,6 +43,8 @@ def get_file_age(path: pathlib.Path) -> float:
         return float('inf')
     return time.time() - path.stat().st_mtime
 
+import sqlite3
+
 def check_health():
     report = {
         "ts": int(time.time()),
@@ -53,6 +55,40 @@ def check_health():
     
     any_stale = False
     any_missing = False
+
+    # Check aggregator health via DB
+    db_path = "/var/lib/sygnif/swarm.db"
+    aggregator_status = "OK"
+    agg_age = float('inf')
+
+    if not os.path.exists(db_path):
+        aggregator_status = "MISSING"
+        any_missing = True
+    else:
+        try:
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(ts) FROM weighted_signals")
+            row = cur.fetchone()
+            if row and row[0]:
+                agg_age = time.time() - row[0]
+                if agg_age > 180:
+                    aggregator_status = "STALE"
+                    any_stale = True
+            else:
+                aggregator_status = "MISSING"
+                any_missing = True
+            conn.close()
+        except sqlite3.Error:
+            aggregator_status = "MISSING"
+            any_missing = True
+
+    report["daemons"]["aggregator"] = {
+        "file": "swarm.db (weighted_signals)",
+        "age_s": round(agg_age, 1) if agg_age != float('inf') else None,
+        "threshold_s": 180,
+        "status": aggregator_status,
+    }
 
     for name, filename in DAEMONS.items():
         path = STATE_DIR / filename
