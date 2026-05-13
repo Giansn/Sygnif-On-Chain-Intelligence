@@ -43,6 +43,12 @@ import urllib.parse
 import urllib.request
 import uuid
 from collections import defaultdict
+
+try:
+    import sygnif_common as common
+except ImportError:
+    # Handle both direct and package imports
+    from . import sygnif_common as common
 from typing import Iterable
 
 # ============================================================================
@@ -137,15 +143,12 @@ def fetch_tip_hash() -> str | None:
 
 
 def fetch_prices():
-    """Fetch latest BTC price from Binance."""
+    """Fetch latest BTC price from common utility."""
     global _btc_price
-    try:
-        r = _http_get_json("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT")
-        if r and "price" in r:
-            _btc_price = float(r["price"])
-            _metrics["price_updates"] += 1
-    except Exception as e:
-        print(f"  ! price fetch failed: {e}", file=sys.stderr, flush=True)
+    p = common.fetch_ticker_price("BTCUSDT")
+    if p:
+        _btc_price = p
+        _metrics["price_updates"] += 1
 
 
 def fetch_block_full(block_hash: str) -> dict | None:
