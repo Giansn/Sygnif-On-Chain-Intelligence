@@ -50,3 +50,18 @@ This rewards setups that have confluence across Bitcoin chain, EVM, and Exchange
 ## 5. Deployment Recommendation
 - Run the Intel Stack and Aggregator on a **low-latency VPS** (e.g., AWS eu-central-1 for Binance/OKX proximity).
 - Use **SQLite WAL mode** to allow concurrent reads from the Trading Bot and writes from the Daemons.
+
+## 6. Implementation Reference
+
+The stack now includes the functional "Brain" and "Execution" reference scripts:
+
+1.  **Aggregator** (`daemons/sygnif_aggregator.py`):
+    - Reads all `swarm.db` events from the last hour.
+    - Applies time-decay (newer = more weight).
+    - Applies confluence weighting (Chain + Market + EVM).
+    - Writes `BTC_GLOBAL` sentiment to `weighted_signals` table.
+
+2.  **Signal Bot** (`daemons/sygnif_signal_bot.py`):
+    - Reads the aggregated sentiment from `swarm.db`.
+    - Executes simulated trades when `score > 65` (Long) or `score < -65` (Short).
+    - Serves as the "Execution Layer" blueprint for a full CCXT integration.
